@@ -1,12 +1,14 @@
 #import <coinbase-official/CoinbaseOAuth.h>
 
 #import "BTCoinbase.h"
+#import "BTCoinbasePaymentMethod.h"
 #import "BTClient_Internal.h"
 #import "BTAppSwitchErrors.h"
 
 @interface BTCoinbase ()
 @property (nonatomic, strong) BTClient *client;
 @property (nonatomic, assign) CoinbaseOAuthAuthenticationMechanism authenticationMechanism;
+@property (nonatomic, strong) BTCoinbasePaymentMethod *linkedPaymentMethod;
 @end
 
 @implementation BTCoinbase
@@ -203,6 +205,63 @@
                 break;
         }
     }];
+}
+
+#pragma mark - Account Association
+
+- (BOOL)isAccountLinked {
+    return self.linkedPaymentMethod != nil;
+}
+
+- (void)linkAccountWithPaymentMethod:(BTCoinbasePaymentMethod *)paymentMethod
+                             success:(BTCoinbaseAccountLinkSuccessBlock)successBlock
+                             failure:(BTCoinbaseAccountLinkFailureBlock)failureBlock {
+    if (!paymentMethod) {
+        if (failureBlock) {
+            NSError *error = [NSError errorWithDomain:BTAppSwitchErrorDomain
+                                                 code:BTAppSwitchErrorFailed
+                                             userInfo:@{NSLocalizedDescriptionKey: @"Cannot link account",
+                                                        NSLocalizedFailureReasonErrorKey: @"Payment method is nil"}];
+            failureBlock(error);
+        }
+        return;
+    }
+    
+    self.linkedPaymentMethod = paymentMethod;
+    [self.client postAnalyticsEvent:@"ios.coinbase.account.linked"];
+    
+    if (successBlock) {
+        successBlock();
+    }
+}
+
+- (void)unlinkAccountWithSuccess:(BTCoinbaseAccountLinkSuccessBlock)successBlock
+                         failure:(BTCoinbaseAccountLinkFailureBlock)failureBlock {
+    if (!self.linkedPaymentMethod) {
+        if (failureBlock) {
+            NSError *error = [NSError errorWithDomain:BTAppSwitchErrorDomain
+                                                 code:BTAppSwitchErrorFailed
+                                             userInfo:@{NSLocalizedDescriptionKey: @"Cannot unlink account",
+                                                        NSLocalizedFailureReasonErrorKey: @"No account is currently linked"}];
+            failureBlock(error);
+        }
+        return;
+    }
+    
+    self.linkedPaymentMethod = nil;
+    [self.client postAnalyticsEvent:@"ios.coinbase.account.unlinked"];
+    
+    if (successBlock) {
+        successBlock();
+    }
+}
+
+- (void)verifyAccountLinkStatus:(BTCoinbaseAccountVerificationBlock)completionBlock {
+    [self.client postAnalyticsEvent:@"ios.coinbase.account.verify"];
+    
+    if (completionBlock) {
+        completionBlock(self.isAccountLinked);
+    }
 }
 
 @end
